@@ -2,6 +2,8 @@
 
 > 帮我从 Web of Science、谷歌学术、中国知网、IEEE 美国电气电子工程师学会与互联网上搜集最新的学术文章资料，并进行挑选、排序、整理、总结
 
+[中文文档](README_zh.md)
+
 An AI-powered academic research assistant that searches multiple academic databases simultaneously, ranks results by relevance, and generates a comprehensive research summary using large language model APIs and the **Model Context Protocol (MCP)**.
 
 ---
