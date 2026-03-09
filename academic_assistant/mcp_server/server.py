@@ -33,6 +33,7 @@ from academic_assistant.searchers import (
     CNKISearcher,
     GoogleScholarSearcher,
     IEEESearcher,
+    WebNewsSearcher,
     WebOfScienceSearcher,
     WebSearcher,
 )
@@ -181,7 +182,8 @@ _SEARCH_TOOLS: list[Tool] = [
                     "description": (
                         "JSON array of paper objects as returned by a search tool. "
                         "Each object must have at least 'title'; 'abstract', 'authors', "
-                        "'year', 'citations', and 'source' are used for ranking when present."
+                        "'year', 'citations', 'journal_partition', and 'source' are used "
+                        "for ranking when present."
                     ),
                 },
                 "top_n": {
@@ -191,6 +193,30 @@ _SEARCH_TOOLS: list[Tool] = [
                 },
             },
             "required": ["query", "papers_json"],
+        },
+    ),
+    Tool(
+        name="search_news",
+        description=(
+            "Search the web for recent research-news articles related to a list of keywords. "
+            "Returns news article titles, URLs, snippets, and an LLM-generated summary. "
+            "Uses Serper, Brave Search, or DuckDuckGo as fallback."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "keywords": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of search keywords",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of news items to return (default 10)",
+                    "default": 10,
+                },
+            },
+            "required": ["keywords"],
         },
     ),
 ]
@@ -247,6 +273,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         top_n: int = int(arguments.get("top_n", 10))
         report_text = await _rank_and_summarize(query, papers_json, top_n)
         return [TextContent(type="text", text=report_text)]
+
+    if name == "search_news":
+        keywords: list[str] = arguments.get("keywords", [])
+        news_text = await _search_news(keywords, max_results)
+        return [TextContent(type="text", text=news_text)]
 
     return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -308,6 +339,26 @@ async def _rank_and_summarize(query: str, papers_json: str, top_n: int) -> str:
     ranker = PaperRanker()
     report = await ranker.rank_and_summarize(query, papers_data, top_n)
     return report.model_dump_json(indent=2, ensure_ascii=False)
+
+
+async def _search_news(keywords: list[str], max_results: int) -> str:
+    """Scrape research-news articles and return as JSON."""
+    from academic_assistant.processors.ranker import PaperRanker
+
+    news_searcher = WebNewsSearcher()
+    items = await news_searcher.search_news(keywords, max_results)
+    ranker = PaperRanker()
+    summary = await ranker.summarize_news(keywords, items)
+    return json.dumps(
+        {
+            "keywords": keywords,
+            "total_news": len(items),
+            "news_summary": summary,
+            "news_items": [item.model_dump() for item in items],
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
 # ---------------------------------------------------------------------------

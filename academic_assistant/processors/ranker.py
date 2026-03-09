@@ -13,12 +13,12 @@ import logging
 from typing import Any
 
 from academic_assistant.config import config
-from academic_assistant.models.paper import Paper, RankedPaper, ResearchReport, Source
+from academic_assistant.models.paper import NewsItem, Paper, RankedPaper, ResearchReport, Source
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Prompt templates
+# Prompt templates – paper ranking
 # ---------------------------------------------------------------------------
 
 _RANKING_SYSTEM_PROMPT = """\
@@ -28,21 +28,27 @@ relevance to the user's research query.
 
 For each paper, assign:
 - relevance_score: a float between 0.0 (not relevant) and 1.0 (highly relevant)
-- reason: a 1–2 sentence explanation of why you assigned that score
+- reason: a 1-2 sentence explanation of why you assigned that score
+
+When computing the relevance_score, weight the following factors:
+1. Topical relevance to the research query (primary factor).
+2. Journal quality: SCI Q1 > SCI Q2 > SCI Q3 > SCI Q4 > EI/ESCI > core/CSCD > unknown.
+3. Citation count: higher citations indicate greater influence.
+4. Recency: more recent papers are generally preferred when relevance is equal.
 
 Then, after ranking all papers:
-- Write a comprehensive narrative summary (3–5 paragraphs) of the overall state of \
+- Write a comprehensive narrative summary (3-5 paragraphs) of the overall state of \
 research in this area.
-- Identify 3–5 key themes across the papers.
-- Identify 2–3 research gaps or future directions suggested by the literature.
+- Identify 3-5 key themes across the papers.
+- Identify 2-3 research gaps or future directions suggested by the literature.
 
 Respond ONLY with valid JSON in exactly this format:
 {
   "ranked_papers": [
     {
       "index": <0-based index into the input papers array>,
-      "relevance_score": <float 0.0–1.0>,
-      "reason": "<1–2 sentence explanation>"
+      "relevance_score": <float 0.0-1.0>,
+      "reason": "<1-2 sentence explanation>"
     },
     ...
   ],
@@ -59,6 +65,37 @@ Papers to evaluate (JSON array):
 {papers_json}
 
 Rank up to {top_n} of the most relevant papers.
+"""
+
+# ---------------------------------------------------------------------------
+# Prompt templates – news summarisation
+# ---------------------------------------------------------------------------
+
+_NEWS_SUMMARY_SYSTEM_PROMPT = """\
+You are a science journalist assistant. You will be given a list of recent \
+research-news articles related to a set of keywords.
+
+Your tasks:
+1. Write a concise summary (2-3 paragraphs) of the current research landscape \
+   and hot topics as reflected by the news articles.
+2. List the 3-5 most important or interesting articles with a one-sentence \
+   description of each.
+
+Respond ONLY with valid JSON in exactly this format:
+{
+  "summary": "<narrative summary>",
+  "highlights": [
+    {"title": "<article title>", "url": "<article url or null>", "description": "<one sentence>"},
+    ...
+  ]
+}
+"""
+
+_NEWS_SUMMARY_USER_TEMPLATE = """\
+Keywords: {keywords}
+
+Recent research-news articles (JSON array):
+{news_json}
 """
 
 
@@ -106,6 +143,7 @@ class PaperRanker:
                 "authors": p.formatted_authors,
                 "year": p.year,
                 "journal": p.journal,
+                "journal_partition": p.journal_partition,
                 "abstract": (p.abstract or "")[:500],  # truncate long abstracts
                 "citations": p.citations,
                 "keywords": p.keywords[:10],
@@ -141,8 +179,54 @@ class PaperRanker:
             research_gaps=llm_json.get("research_gaps", []),
         )
 
+    async def summarize_news(
+        self, keywords: list[str], news_items: list[NewsItem]
+    ) -> str:
+        """
+        Generate a narrative summary of *news_items* using the configured LLM.
+
+        Parameters
+        ----------
+        keywords:
+            The keywords used for the research session.
+        news_items:
+            List of news articles to summarise.
+
+        Returns
+        -------
+        str
+            Narrative summary, or an empty string if no LLM key is configured
+            or *news_items* is empty.
+        """
+        if not news_items:
+            return ""
+
+        compact = [
+            {
+                "title": item.title,
+                "url": item.url,
+                "snippet": item.snippet,
+                "source_name": item.source_name,
+                "published_date": item.published_date,
+            }
+            for item in news_items
+        ]
+        user_message = _NEWS_SUMMARY_USER_TEMPLATE.format(
+            keywords=", ".join(keywords),
+            news_json=json.dumps(compact, ensure_ascii=False, indent=2),
+        )
+
+        if self._provider == "anthropic":
+            result = await self._call_anthropic_raw(_NEWS_SUMMARY_SYSTEM_PROMPT, user_message)
+        elif self._provider == "deepseek":
+            result = await self._call_deepseek_raw(_NEWS_SUMMARY_SYSTEM_PROMPT, user_message)
+        else:
+            result = await self._call_openai_raw(_NEWS_SUMMARY_SYSTEM_PROMPT, user_message)
+
+        return result.get("summary", "")
+
     # ------------------------------------------------------------------
-    # LLM call helpers
+    # LLM call helpers (paper ranking)
     # ------------------------------------------------------------------
 
     async def _call_llm(
@@ -162,6 +246,21 @@ class PaperRanker:
         return await self._call_openai(user_message)
 
     async def _call_openai(self, user_message: str) -> dict[str, Any]:
+        return await self._call_openai_raw(_RANKING_SYSTEM_PROMPT, user_message)
+
+    async def _call_anthropic(self, user_message: str) -> dict[str, Any]:
+        return await self._call_anthropic_raw(_RANKING_SYSTEM_PROMPT, user_message)
+
+    async def _call_deepseek(self, user_message: str) -> dict[str, Any]:
+        return await self._call_deepseek_raw(_RANKING_SYSTEM_PROMPT, user_message)
+
+    # ------------------------------------------------------------------
+    # Raw LLM call helpers (reusable with any system prompt)
+    # ------------------------------------------------------------------
+
+    async def _call_openai_raw(
+        self, system_prompt: str, user_message: str
+    ) -> dict[str, Any]:
         if not config.OPENAI_API_KEY:
             logger.warning("OPENAI_API_KEY not set; returning empty ranking.")
             return {}
@@ -172,7 +271,7 @@ class PaperRanker:
             response = await client.chat.completions.create(
                 model=config.OPENAI_MODEL,
                 messages=[
-                    {"role": "system", "content": _RANKING_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
                 ],
                 response_format={"type": "json_object"},
@@ -184,7 +283,9 @@ class PaperRanker:
             logger.error("OpenAI call failed: %s", exc)
             return {}
 
-    async def _call_anthropic(self, user_message: str) -> dict[str, Any]:
+    async def _call_anthropic_raw(
+        self, system_prompt: str, user_message: str
+    ) -> dict[str, Any]:
         if not config.ANTHROPIC_API_KEY:
             logger.warning("ANTHROPIC_API_KEY not set; returning empty ranking.")
             return {}
@@ -195,7 +296,7 @@ class PaperRanker:
             response = await client.messages.create(
                 model=config.ANTHROPIC_MODEL,
                 max_tokens=4096,
-                system=_RANKING_SYSTEM_PROMPT,
+                system=system_prompt,
                 messages=[{"role": "user", "content": user_message}],
                 temperature=0.2,
             )
@@ -209,7 +310,9 @@ class PaperRanker:
             logger.error("Anthropic call failed: %s", exc)
             return {}
 
-    async def _call_deepseek(self, user_message: str) -> dict[str, Any]:
+    async def _call_deepseek_raw(
+        self, system_prompt: str, user_message: str
+    ) -> dict[str, Any]:
         """Call the DeepSeek API using its OpenAI-compatible interface."""
         if not config.DEEPSEEK_API_KEY:
             logger.warning("DEEPSEEK_API_KEY not set; returning empty ranking.")
@@ -224,7 +327,7 @@ class PaperRanker:
             response = await client.chat.completions.create(
                 model=config.DEEPSEEK_MODEL,
                 messages=[
-                    {"role": "system", "content": _RANKING_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
                 ],
                 response_format={"type": "json_object"},

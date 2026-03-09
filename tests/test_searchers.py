@@ -159,3 +159,66 @@ class TestCNKISearcher:
         searcher = CNKISearcher()
         papers = searcher._parse_html("<html><body></body></html>", 10)
         assert papers == []
+
+
+class TestWebNewsSearcher:
+
+    async def test_serper_news_returns_items(self):
+        from academic_assistant.searchers.web_news import WebNewsSearcher
+
+        searcher = WebNewsSearcher()
+        searcher._serper_key = "fake-key"
+        searcher._brave_key = ""
+
+        mock_data = {
+            "news": [
+                {
+                    "title": "AI in Medicine",
+                    "link": "https://example.com/news",
+                    "snippet": "Researchers apply AI to diagnose diseases.",
+                    "source": "TechNews",
+                    "date": "2024-03-01",
+                }
+            ]
+        }
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status = MagicMock()
+            mock_resp.json = MagicMock(return_value=mock_data)
+            mock_post.return_value = mock_resp
+            items = await searcher.search_news(["AI", "medicine"], max_results=5)
+
+        assert len(items) == 1
+        assert items[0].title == "AI in Medicine"
+        assert items[0].url == "https://example.com/news"
+        assert items[0].source_name == "TechNews"
+
+    async def test_network_failure_returns_empty_list(self):
+        from academic_assistant.searchers.web_news import WebNewsSearcher
+        import httpx
+
+        searcher = WebNewsSearcher()
+        searcher._serper_key = ""
+        searcher._brave_key = ""
+
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+            mock_get.side_effect = httpx.ConnectError("Connection refused")
+            items = await searcher.search_news(["AI"], max_results=5)
+
+        assert items == []
+
+    async def test_empty_keywords_returns_items_or_empty(self):
+        """search_news with empty keywords should not raise."""
+        from academic_assistant.searchers.web_news import WebNewsSearcher
+        import httpx
+
+        searcher = WebNewsSearcher()
+        searcher._serper_key = ""
+        searcher._brave_key = ""
+
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+            mock_get.side_effect = httpx.ConnectError("No network")
+            items = await searcher.search_news([], max_results=5)
+
+        assert isinstance(items, list)
+

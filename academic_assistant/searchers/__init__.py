@@ -6,6 +6,7 @@ from academic_assistant.searchers.google_scholar import GoogleScholarSearcher
 from academic_assistant.searchers.cnki import CNKISearcher
 from academic_assistant.searchers.ieee import IEEESearcher
 from academic_assistant.searchers.web_search import WebSearcher
+from academic_assistant.searchers.web_news import WebNewsSearcher
 
 __all__ = [
     "BaseSearcher",
@@ -14,4 +15,5 @@ __all__ = [
     "CNKISearcher",
     "IEEESearcher",
     "WebSearcher",
+    "WebNewsSearcher",
 ]

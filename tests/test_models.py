@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from academic_assistant.models.paper import (
+    NewsItem,
     Paper,
     RankedPaper,
     ResearchReport,
@@ -58,6 +59,33 @@ class TestPaper:
         data = paper.model_dump()
         assert data["source"] == "ieee"
 
+    def test_journal_partition_field(self):
+        paper = Paper(title="T", journal="Nature", journal_partition="SCI Q1")
+        assert paper.journal_partition == "SCI Q1"
+
+    def test_journal_partition_defaults_to_none(self):
+        paper = Paper(title="T")
+        assert paper.journal_partition is None
+
+
+class TestNewsItem:
+    def test_minimal_news_item(self):
+        item = NewsItem(title="AI research breakthrough")
+        assert item.title == "AI research breakthrough"
+        assert item.url is None
+        assert item.snippet is None
+
+    def test_full_news_item(self):
+        item = NewsItem(
+            title="New LLM model released",
+            url="https://example.com/news",
+            snippet="A new model beats benchmarks",
+            source_name="TechNews",
+            published_date="2024-01-15",
+        )
+        assert item.source_name == "TechNews"
+        assert item.published_date == "2024-01-15"
+
 
 class TestSearchResult:
     def test_success_result(self):
@@ -85,19 +113,28 @@ class TestResearchReport:
         assert report.total_papers_found == 0
         assert report.key_themes == []
         assert report.research_gaps == []
+        assert report.news_items == []
+        assert report.news_summary == ""
+        assert report.keywords == []
 
     def test_full_report(self):
         paper = Paper(title="Great Paper", year=2024, source=Source.IEEE)
         ranked = RankedPaper(paper=paper, rank=1, relevance_score=0.95, reason="Highly relevant")
         report = ResearchReport(
             query="deep learning",
+            keywords=["deep learning", "CNN"],
             sources_searched=[Source.IEEE, Source.WEB],
             total_papers_found=5,
             ranked_papers=[ranked],
             summary="Deep learning is advancing.",
             key_themes=["transformers", "efficiency"],
             research_gaps=["few-shot learning"],
+            news_items=[NewsItem(title="News", url="https://example.com")],
+            news_summary="Recent advances in deep learning.",
         )
         assert len(report.ranked_papers) == 1
         assert report.ranked_papers[0].rank == 1
         assert len(report.key_themes) == 2
+        assert report.keywords == ["deep learning", "CNN"]
+        assert len(report.news_items) == 1
+        assert report.news_summary == "Recent advances in deep learning."

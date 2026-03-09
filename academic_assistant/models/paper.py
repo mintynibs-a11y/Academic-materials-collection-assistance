@@ -1,5 +1,5 @@
 """
-Core data models for papers and search results.
+Core data models for papers, news items, and search results.
 
 All models use Pydantic v2 for validation and serialisation.
 """
@@ -34,6 +34,13 @@ class Paper(BaseModel):
     year: Optional[int] = Field(None, description="Publication year", ge=1000)
     published_date: Optional[date] = Field(None, description="Full publication date")
     journal: Optional[str] = Field(None, description="Journal or conference name")
+    journal_partition: Optional[str] = Field(
+        None,
+        description=(
+            "Journal partition / indexing tier, e.g. 'SCI Q1', 'SCI Q2', "
+            "'SCI Q3', 'SCI Q4', 'EI', 'ESCI', 'CSCD', '北大核心', '无分区'"
+        ),
+    )
     doi: Optional[str] = Field(None, description="Digital Object Identifier")
     url: Optional[str] = Field(None, description="Link to paper or landing page")
     pdf_url: Optional[str] = Field(None, description="Direct link to PDF if available")
@@ -60,6 +67,16 @@ class Paper(BaseModel):
         year_str = f" ({self.year})" if self.year else ""
         citations_str = f", cited {self.citations}×" if self.citations is not None else ""
         return f"{self.title}{year_str} — {self.formatted_authors}{citations_str}"
+
+
+class NewsItem(BaseModel):
+    """A single research-news article scraped from the web."""
+
+    title: str = Field(..., description="Article title")
+    url: Optional[str] = Field(None, description="Link to the article")
+    snippet: Optional[str] = Field(None, description="Short excerpt or description")
+    source_name: Optional[str] = Field(None, description="Publishing site or outlet name")
+    published_date: Optional[str] = Field(None, description="Publication date string as found on the page")
 
 
 class SearchResult(BaseModel):
@@ -93,6 +110,7 @@ class ResearchReport(BaseModel):
     """Final output produced by the assistant after a full research session."""
 
     query: str
+    keywords: list[str] = Field(default_factory=list, description="Keywords used for the search")
     sources_searched: list[Source]
     total_papers_found: int
     ranked_papers: list[RankedPaper]
@@ -100,4 +118,10 @@ class ResearchReport(BaseModel):
     key_themes: list[str] = Field(default_factory=list, description="Major themes identified")
     research_gaps: list[str] = Field(
         default_factory=list, description="Research gaps or future directions noted"
+    )
+    news_items: list[NewsItem] = Field(
+        default_factory=list, description="Recent research-news articles related to the keywords"
+    )
+    news_summary: str = Field(
+        default="", description="LLM-generated summary of the research-news articles"
     )
