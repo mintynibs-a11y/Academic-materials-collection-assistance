@@ -46,7 +46,7 @@
 |---|---|
 | **多数据源并发检索** | Web of Science · 谷歌学术 · 中国知网（CNKI）· IEEE Xplore · 通用网络搜索，全部并发执行 |
 | **自动去重** | 基于标题归一化（大小写不敏感）自动合并重复文献 |
-| **LLM 智能排序** | 调用 OpenAI 或 Anthropic 对文献按相关性评分（0–1） |
+| **LLM 智能排序** | 调用 OpenAI、Anthropic 或 DeepSeek 对文献按相关性评分（0–1） |
 | **研究报告生成** | 包含叙述性摘要、关键主题列表、研究空白分析 |
 | **MCP 服务器** | 将 7 个搜索/排序工具通过 MCP 协议暴露给 Claude Desktop 等客户端 |
 | **命令行界面（CLI）** | 直接在终端运行完整的文献调研会话 |
@@ -169,7 +169,7 @@ cp .env.example .env
 ```dotenv
 # =================== LLM 大语言模型 ===================
 
-# 选择 LLM 提供商：openai（默认）或 anthropic
+# 选择 LLM 提供商：openai（默认）、anthropic 或 deepseek
 LLM_PROVIDER=openai
 
 # OpenAI 配置
@@ -178,11 +178,19 @@ OPENAI_API_KEY=sk-...
 # 使用的模型，默认 gpt-4o（支持 JSON 模式）
 OPENAI_MODEL=gpt-4o
 
-# Anthropic 配置（与 OpenAI 二选一即可）
+# Anthropic 配置（与 OpenAI / DeepSeek 三选一即可）
 # 获取地址：https://console.anthropic.com/
 ANTHROPIC_API_KEY=sk-ant-...
 # 使用的模型，默认 claude-3-5-sonnet-20241022
 ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+
+# DeepSeek 配置（与 OpenAI / Anthropic 三选一即可）
+# 获取地址：https://platform.deepseek.com/
+DEEPSEEK_API_KEY=sk-...
+# 使用的模型，默认 deepseek-chat
+DEEPSEEK_MODEL=deepseek-chat
+# API 基础地址（使用官方服务无需修改）
+DEEPSEEK_BASE_URL=https://api.deepseek.com
 
 # =================== 学术数据库 API ===================
 
@@ -702,9 +710,14 @@ OPENAI_MODEL=gpt-4o
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+
+# 或使用 DeepSeek
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_MODEL=deepseek-chat
 ```
 
-两者只需设置其中一个即可，`LLM_PROVIDER` 控制实际调用哪个。
+三者只需设置其中一个即可，`LLM_PROVIDER` 控制实际调用哪个。DeepSeek 使用与 OpenAI 兼容的 API 接口，国内访问速度通常更快且费用较低。
 
 ---
 
@@ -720,9 +733,9 @@ ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
 
 ### Q: LLM 返回空的排序结果
 
-**可能原因**：`OPENAI_API_KEY` 或 `ANTHROPIC_API_KEY` 未配置或无效。
+**可能原因**：`OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 或 `DEEPSEEK_API_KEY` 未配置或无效。
 
-**解决**：检查 `.env` 文件，确认 Key 填写正确且账户有余额/权限。日志中搜索 `"OPENAI_API_KEY not set"` 或 `"OpenAI call failed"` 可确认具体原因。
+**解决**：检查 `.env` 文件，确认所选提供商的 Key 填写正确且账户有余额/权限。日志中搜索 `"not set"` 或 `"call failed"` 可确认具体原因。如果网络访问 OpenAI/Anthropic 受限，可切换为 `LLM_PROVIDER=deepseek` 并配置 `DEEPSEEK_API_KEY`。
 
 ---
 

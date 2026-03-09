@@ -66,6 +66,17 @@ class TestPaperRanker:
         assert report.total_papers_found == 2
         assert len(report.ranked_papers) == 2
 
+    async def test_rank_with_deepseek(self):
+        ranker = PaperRanker()
+        ranker._provider = "deepseek"
+
+        with patch.object(ranker, "_call_deepseek", new=AsyncMock(return_value=SAMPLE_LLM_RESPONSE)):
+            report = await ranker.rank_and_summarize("transformer models", SAMPLE_PAPERS, top_n=2)
+
+        assert report.total_papers_found == 2
+        assert len(report.ranked_papers) == 2
+        assert report.ranked_papers[0].relevance_score == pytest.approx(0.98)
+
     async def test_empty_papers_returns_empty_report(self):
         ranker = PaperRanker()
         report = await ranker.rank_and_summarize("test", [], top_n=5)

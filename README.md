@@ -15,7 +15,7 @@ An AI-powered academic research assistant that searches multiple academic databa
 | **Multi-source search** | Web of Science · Google Scholar · 中国知网 (CNKI) · IEEE Xplore · General web |
 | **Concurrent search** | All sources queried in parallel for fast results |
 | **Deduplication** | Near-duplicate papers removed automatically |
-| **LLM ranking** | Papers ranked 0–1 by relevance using OpenAI or Anthropic |
+| **LLM ranking** | Papers ranked 0–1 by relevance using OpenAI, Anthropic, or DeepSeek |
 | **Research summary** | Narrative summary, key themes, and research gaps |
 | **MCP server** | Expose all tools to Claude Desktop or any MCP client |
 | **CLI** | Run a full research session from the command line |
@@ -64,8 +64,9 @@ cp .env.example .env
 
 | Variable | Source | Required? |
 |---|---|---|
-| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) | Yes (or use Anthropic) |
+| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) | Yes (or use Anthropic / DeepSeek) |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | Alt. to OpenAI |
+| `DEEPSEEK_API_KEY` | [platform.deepseek.com](https://platform.deepseek.com) | Alt. to OpenAI |
 | `WOS_API_KEY` | [developer.clarivate.com](https://developer.clarivate.com) | Optional |
 | `IEEE_API_KEY` | [developer.ieee.org](https://developer.ieee.org) | Optional |
 | `SERPER_API_KEY` | [serper.dev](https://serper.dev) | Optional (improves web search) |

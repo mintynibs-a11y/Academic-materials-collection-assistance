@@ -1,9 +1,9 @@
 """
 LLM-powered paper ranking and summarisation.
 
-Supports both OpenAI and Anthropic as LLM backends.
+Supports OpenAI, Anthropic, and DeepSeek as LLM backends.
 The backend is selected based on the LLM_PROVIDER config value
-("openai" or "anthropic").
+("openai", "anthropic", or "deepseek").
 """
 
 from __future__ import annotations
@@ -157,6 +157,8 @@ class PaperRanker:
 
         if self._provider == "anthropic":
             return await self._call_anthropic(user_message)
+        if self._provider == "deepseek":
+            return await self._call_deepseek(user_message)
         return await self._call_openai(user_message)
 
     async def _call_openai(self, user_message: str) -> dict[str, Any]:
@@ -205,6 +207,33 @@ class PaperRanker:
             return json.loads(text)
         except Exception as exc:
             logger.error("Anthropic call failed: %s", exc)
+            return {}
+
+    async def _call_deepseek(self, user_message: str) -> dict[str, Any]:
+        """Call the DeepSeek API using its OpenAI-compatible interface."""
+        if not config.DEEPSEEK_API_KEY:
+            logger.warning("DEEPSEEK_API_KEY not set; returning empty ranking.")
+            return {}
+        try:
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI(
+                api_key=config.DEEPSEEK_API_KEY,
+                base_url=config.DEEPSEEK_BASE_URL,
+            )
+            response = await client.chat.completions.create(
+                model=config.DEEPSEEK_MODEL,
+                messages=[
+                    {"role": "system", "content": _RANKING_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.2,
+            )
+            text = response.choices[0].message.content or "{}"
+            return json.loads(text)
+        except Exception as exc:
+            logger.error("DeepSeek call failed: %s", exc)
             return {}
 
     # ------------------------------------------------------------------
