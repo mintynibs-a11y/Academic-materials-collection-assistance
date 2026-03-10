@@ -6,6 +6,11 @@
 
 An AI-powered academic research assistant that searches multiple academic databases simultaneously, ranks results by relevance, and generates a comprehensive research summary using large language model APIs and the **Model Context Protocol (MCP)**.
 
+> **Deployment model — self-hosted only.**
+> This is an open-source command-line tool that you run on your own computer.
+> There is **no hosted cloud version** and no SaaS portal — you clone the repo, add your own API keys, and run it locally.
+> See [Quick Start](#quick-start) below for the three-step setup.
+
 ---
 
 ## Features
@@ -160,6 +165,35 @@ When running as an MCP server the following tools are available:
 ```bash
 pytest tests/ -v
 ```
+
+---
+
+## FAQ
+
+### Do I need to download and install it, or is there a cloud version I can just open in a browser?
+
+**You need to install and run it locally** — there is no hosted web UI or cloud service.
+The setup takes about five minutes:
+
+1. Clone the repo and run `pip install -e ".[dev]"`.
+2. Copy `.env.example` to `.env` and fill in at least one LLM API key (OpenAI, Anthropic, or DeepSeek).
+3. Run `python main.py "your research topic"`.
+
+That's it.  Google Scholar and DuckDuckGo work without any additional keys, so you can try a first search with only an LLM key.
+
+### What do I need before I can start?
+
+| Requirement | Notes |
+|---|---|
+| Python 3.11+ | [python.org/downloads](https://www.python.org/downloads/) |
+| One LLM key | OpenAI / Anthropic / DeepSeek (choose any one) |
+| Internet access | Required to reach the academic databases |
+
+All other API keys (WoS, IEEE, Serper, Brave) are optional and only improve coverage.
+
+### Can I run it on Windows?
+
+Yes. Use `python main.py "..."` exactly as shown. On Windows, create the virtual environment with `.venv\Scripts\Activate.ps1` instead of `source .venv/bin/activate`.
 
 ---
 

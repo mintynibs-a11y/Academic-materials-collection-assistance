@@ -38,6 +38,12 @@
 - **结构化研究报告**：生成包含排名文献、关键主题、研究空白与叙述性摘要的完整研究报告。
 - **MCP 协议支持**：通过 [Model Context Protocol（MCP）](https://modelcontextprotocol.io/) 将所有工具暴露给 Claude Desktop 或其他兼容客户端，实现"对话式"文献检索。
 
+> **部署方式说明 — 本地自行部署。**
+> 本工具是一个开源命令行程序，需要您**下载到自己的电脑上运行**。
+> 目前**没有云端托管版本**，也不提供网页端 SaaS 服务。
+> 您需要克隆代码仓库、填写自己的 API Key，然后在本地执行。
+> 详细步骤请参见 [§5 安装步骤](#5-安装步骤) 与 [§7 快速上手](#7-快速上手)。
+
 ---
 
 ## 2. 功能特性
@@ -789,6 +795,55 @@ DEEPSEEK_MODEL=deepseek-chat
 ---
 
 ## 12. 常见问题与排查
+
+### Q: 这个工具是下载到本地使用，还是有云端/网页版可以直接用？
+
+**需要下载到本地运行**，目前没有云端托管版本、网页端或 SaaS 服务。
+
+整个安装过程大约 5 分钟：
+
+1. 克隆仓库并安装依赖：
+   ```bash
+   git clone https://github.com/mintynibs-a11y/Academic-materials-collection-assistance.git
+   cd Academic-materials-collection-assistance
+   pip install -e ".[dev]"
+   ```
+2. 复制并填写 `.env` 文件（至少需要一个 LLM API Key）：
+   ```bash
+   cp .env.example .env
+   # 用文本编辑器打开 .env，填入 OPENAI_API_KEY / DEEPSEEK_API_KEY 等
+   ```
+3. 运行：
+   ```bash
+   python main.py "你的研究主题"
+   ```
+
+谷歌学术和 DuckDuckGo 无需额外 Key，只要有一个 LLM API Key 即可完成第一次检索。
+
+### Q: 开始使用前需要准备什么？
+
+| 所需条件 | 说明 |
+|---|---|
+| Python 3.11 或更高版本 | 官网下载：[python.org/downloads](https://www.python.org/downloads/)（建议使用 3.11 或 3.12） |
+| 至少一个 LLM API Key | OpenAI / Anthropic / DeepSeek 三选一即可；国内用户推荐 DeepSeek |
+| 能正常访问互联网 | 用于访问各学术数据库 |
+
+WoS、IEEE、Serper、Brave 等 Key 均为可选项，不配置时对应数据源跳过，不影响其他来源。
+
+---
+
+### Q: Windows 系统可以使用吗？
+
+可以。命令与 Linux/macOS 完全一致（`python main.py "..."`）。创建虚拟环境时激活命令略有不同：
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1   # Windows PowerShell
+# 或
+.venv\Scripts\activate.bat   # Windows CMD
+```
+
+---
 
 ### Q: 运行后看不到任何文献结果
 
