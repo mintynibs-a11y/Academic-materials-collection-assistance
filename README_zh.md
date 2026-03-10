@@ -46,10 +46,12 @@
 |---|---|
 | **多数据源并发检索** | Web of Science · 谷歌学术 · 中国知网（CNKI）· IEEE Xplore · 通用网络搜索，全部并发执行 |
 | **自动去重** | 基于标题归一化（大小写不敏感）自动合并重复文献 |
-| **LLM 智能排序** | 调用 OpenAI、Anthropic 或 DeepSeek 对文献按相关性评分（0–1） |
+| **期刊分区标注** | 自动识别并标注每篇文献的分区（SCI Q1–Q4 / EI / ESCI / CSCD / 北大核心） |
+| **LLM 智能排序** | 调用 OpenAI、Anthropic 或 DeepSeek 对文献按相关性评分（0–1），综合期刊分区与被引次数加权排序 |
 | **研究报告生成** | 包含叙述性摘要、关键主题列表、研究空白分析 |
-| **MCP 服务器** | 将 7 个搜索/排序工具通过 MCP 协议暴露给 Claude Desktop 等客户端 |
-| **命令行界面（CLI）** | 直接在终端运行完整的文献调研会话 |
+| **科研资讯抓取** | 自动抓取相关科研动态新闻并生成 LLM 摘要 |
+| **MCP 服务器** | 将 8 个搜索/排序工具通过 MCP 协议暴露给 Claude Desktop 等客户端 |
+| **命令行界面（CLI）** | 直接在终端运行完整的文献调研会话（支持自由文本或 `--keywords` 关键词模式） |
 | **Python API** | 在自己的代码中以异步方式调用 `AcademicAssistant` 类 |
 
 ---
@@ -69,7 +71,7 @@ Academic-materials-collection-assistance/
     ├── assistant.py                   # 高层编排器 + CLI 入口
     │
     ├── models/
-    │   └── paper.py                   # Pydantic 数据模型（Paper、SearchResult、ResearchReport 等）
+    │   └── paper.py                   # Pydantic 数据模型（Paper、NewsItem、SearchResult、ResearchReport 等）
     │
     ├── searchers/                     # 各数据源搜索适配器
     │   ├── base.py                    # 抽象基类 BaseSearcher
@@ -77,13 +79,17 @@ Academic-materials-collection-assistance/
     │   ├── google_scholar.py          # 谷歌学术（scholarly 库）
     │   ├── cnki.py                    # 中国知网（HTML 爬取）
     │   ├── ieee.py                    # IEEE Xplore（官方 REST API）
-    │   └── web_search.py              # 通用网络搜索（Serper / Brave / DuckDuckGo）
+    │   ├── web_search.py              # 通用网络搜索（Serper / Brave / DuckDuckGo）
+    │   └── web_news.py                # 科研资讯抓取（追加 "科研进展" 等关键词的网络搜索）
     │
     ├── processors/
-    │   └── ranker.py                  # LLM 驱动的排序与摘要生成
+    │   └── ranker.py                  # LLM 驱动的排序、摘要生成与资讯总结
+    │
+    ├── utils/
+    │   └── journal_partition.py       # 期刊名称 → 分区等级静态映射表
     │
     └── mcp_server/
-        └── server.py                  # MCP 服务器（暴露 7 个工具）
+        └── server.py                  # MCP 服务器（暴露 8 个工具）
 ```
 
 ### 数据流概览
@@ -111,10 +117,11 @@ AcademicAssistant.research()
 | pip | 任意最新版本 |
 | （可选）Git | 用于克隆仓库 |
 
-**必须**至少拥有以下两类 API Key 之一才能使用 LLM 排序功能：
+**必须**至少拥有以下三类 API Key 之一才能使用 LLM 排序功能：
 
 - **OpenAI API Key**（推荐，支持 `gpt-4o` 等模型）
 - **Anthropic API Key**（支持 Claude 系列模型）
+- **DeepSeek API Key**（支持 `deepseek-chat` 等模型，国内访问速度快、费用低，推荐国内用户使用）
 
 其他 API Key（WoS、IEEE、Serper、Brave）为可选项，不配置时对应数据源会返回错误，不影响其他数据源的正常检索。
 
@@ -260,23 +267,30 @@ python main.py "大语言模型在临床医学中的应用"
 #### 完整参数说明
 
 ```bash
-python main.py <研究主题> [--top-n N] [--max-per-source N]
+python main.py [<研究主题>] [--keywords KW [KW ...]] [--top-n N] [--max-per-source N]
 ```
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
-| `<研究主题>` | 必填 | 自然语言研究查询词，支持中英文 |
+| `<研究主题>` | — | 自然语言研究查询词（与 `--keywords` 二选一） |
+| `--keywords KW ...` | — | 一个或多个具体关键词，搜索时以 `AND` 连接（与 `<研究主题>` 二选一） |
 | `--top-n N` | 10 | 最终报告中展示的最相关文献数量 |
 | `--max-per-source N` | 10 | 每个数据源最多返回的结果数量 |
 
 #### 使用示例
 
 ```bash
-# 中文查询
+# 自然语言查询
 python main.py "Transformer 模型在蛋白质结构预测中的应用"
+
+# 关键词模式（更精准，多个关键词以 AND 连接）
+python main.py --keywords "深度学习" "蛋白质结构预测"
 
 # 英文查询，展示 Top 20，每源最多 15 条
 python main.py "deep learning protein folding" --top-n 20 --max-per-source 15
+
+# 关键词模式 + 自定义数量
+python main.py --keywords "deep learning" "protein folding" --top-n 20 --max-per-source 15
 
 # 限制返回数量以加快速度
 python main.py "量子计算综述" --top-n 5 --max-per-source 5
@@ -398,20 +412,29 @@ async def main():
     # 创建助手实例（每个数据源最多返回 10 条结果）
     assistant = AcademicAssistant(max_results_per_source=10)
 
-    # 执行完整研究会话，返回 Top 15 相关文献
+    # 方式一：关键词模式（推荐，多个关键词以 AND 连接，更精准）
     report = await assistant.research(
-        "深度学习在医学影像诊断中的应用",
+        keywords=["深度学习", "医学影像诊断"],
         top_n=15,
     )
+
+    # 方式二：自然语言查询
+    # report = await assistant.research(
+    #     query="深度学习在医学影像诊断中的应用",
+    #     top_n=15,
+    # )
 
     # 打印格式化报告
     AcademicAssistant.print_report(report)
 
     # 或直接访问报告字段
     print(f"共找到 {report.total_papers_found} 篇文献")
+    print(f"关键词：{report.keywords}")
     print(f"关键主题：{report.key_themes}")
     for rp in report.ranked_papers:
         print(f"#{rp.rank} [{rp.relevance_score:.2f}] {rp.paper.title}")
+        if rp.paper.journal_partition:
+            print(f"  分区：{rp.paper.journal_partition}")
 
 asyncio.run(main())
 ```
@@ -465,7 +488,7 @@ with open("report.json", "w", encoding="utf-8") as f:
 
 ## 8. MCP 工具参考
 
-以 MCP 服务器模式运行时，以下 7 个工具可供调用：
+以 MCP 服务器模式运行时，以下 8 个工具可供调用：
 
 ### `search_web_of_science`
 
@@ -571,6 +594,36 @@ with open("report.json", "w", encoding="utf-8") as f:
 
 ---
 
+### `search_news`
+
+抓取与关键词相关的最新科研资讯文章，并调用 LLM 生成一段综合摘要。
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `keywords` | array[string] | ✅ | — | 关键词列表（如 `["深度学习", "医学影像"]`） |
+| `max_results` | integer | ❌ | 10 | 最多返回的资讯条数 |
+
+**返回格式**（JSON）：
+
+```json
+{
+  "keywords": ["深度学习", "医学影像"],
+  "total_news": 8,
+  "news_summary": "近期研究动态：...",
+  "news_items": [
+    {
+      "title": "...",
+      "url": "https://...",
+      "snippet": "...",
+      "source_name": "Nature News",
+      "published_date": "2025-03-01"
+    }
+  ]
+}
+```
+
+---
+
 ## 9. 数据模型说明
 
 所有数据模型基于 **Pydantic v2** 实现，位于 `academic_assistant/models/paper.py`。
@@ -585,6 +638,7 @@ with open("report.json", "w", encoding="utf-8") as f:
 | `year` | int \| None | 发表年份（≥ 1000） |
 | `published_date` | date \| None | 完整发表日期 |
 | `journal` | str \| None | 期刊或会议名称 |
+| `journal_partition` | str \| None | 期刊分区等级，如 `"SCI Q1"`、`"EI"`、`"CSCD"`、`"北大核心"` 等；未知时为 `None` |
 | `doi` | str \| None | DOI 编号 |
 | `url` | str \| None | 文献链接 |
 | `pdf_url` | str \| None | PDF 直链（如有） |
@@ -632,17 +686,30 @@ paper.short_summary()    # "标题 (2024) — 张三 et al., cited 100×"
 | `relevance_score` | float | 相关性分数（0–1） |
 | `reason` | str | LLM 给出的排名理由 |
 
+### `NewsItem` — 科研资讯文章
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `title` | str | 文章标题（必填） |
+| `url` | str \| None | 文章链接 |
+| `snippet` | str \| None | 短摘要或描述 |
+| `source_name` | str \| None | 发布媒体或网站名称 |
+| `published_date` | str \| None | 页面上显示的发布日期字符串 |
+
 ### `ResearchReport` — 完整研究报告
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `query` | str | 研究查询词 |
+| `keywords` | list[str] | 本次搜索使用的关键词列表 |
 | `sources_searched` | list[Source] | 检索过的数据源列表 |
 | `total_papers_found` | int | 去重后总文献数 |
 | `ranked_papers` | list[RankedPaper] | 排序后的 Top N 文献 |
 | `summary` | str | LLM 生成的叙述性总结 |
 | `key_themes` | list[str] | 主要研究主题 |
 | `research_gaps` | list[str] | 研究空白与未来方向 |
+| `news_items` | list[NewsItem] | 抓取到的科研资讯文章列表 |
+| `news_summary` | str | LLM 生成的资讯摘要 |
 
 ---
 
@@ -693,8 +760,8 @@ paper.short_summary()    # "标题 (2024) — 张三 et al., cited 100×"
 
 `PaperRanker`（位于 `academic_assistant/processors/ranker.py`）的工作流程：
 
-1. **压缩文献信息**：将每篇文献的标题、作者、年份、期刊、摘要（截断至 500 字符）、被引次数、关键词整理为紧凑 JSON
-2. **构造 Prompt**：将研究查询词、压缩文献列表发送给 LLM（系统提示要求以专家学术分析师身份响应）
+1. **压缩文献信息**：将每篇文献的标题、作者、年份、期刊、期刊分区（`journal_partition`）、摘要（截断至 500 字符）、被引次数、关键词整理为紧凑 JSON
+2. **构造 Prompt**：将研究查询词、压缩文献列表发送给 LLM（系统提示要求以专家学术分析师身份响应，并指示优先考虑主题相关性，其次期刊质量 SCI Q1 > Q2 > Q3 > Q4 > EI > CSCD > 未知，再次被引次数与时效性）
 3. **解析响应**：LLM 以严格 JSON 格式返回排名列表（含相关性分数和理由）、叙述性摘要、主题列表、研究空白列表
 4. **构建报告**：将排名结果与原始文献对象关联，组装为 `ResearchReport`
 

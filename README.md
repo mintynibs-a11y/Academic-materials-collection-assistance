@@ -15,10 +15,12 @@ An AI-powered academic research assistant that searches multiple academic databa
 | **Multi-source search** | Web of Science · Google Scholar · 中国知网 (CNKI) · IEEE Xplore · General web |
 | **Concurrent search** | All sources queried in parallel for fast results |
 | **Deduplication** | Near-duplicate papers removed automatically |
-| **LLM ranking** | Papers ranked 0–1 by relevance using OpenAI, Anthropic, or DeepSeek |
+| **Journal partition** | Each paper is annotated with its tier (SCI Q1–Q4 / EI / ESCI / CSCD / 北大核心) |
+| **LLM ranking** | Papers ranked 0–1 by relevance using OpenAI, Anthropic, or DeepSeek; journal tier and citation count are factored in |
 | **Research summary** | Narrative summary, key themes, and research gaps |
+| **Research news** | Scrapes recent research-news articles and generates an LLM summary |
 | **MCP server** | Expose all tools to Claude Desktop or any MCP client |
-| **CLI** | Run a full research session from the command line |
+| **CLI** | Run a full research session from the command line (`--keywords` or free-text query) |
 
 ---
 
@@ -29,18 +31,21 @@ academic_assistant/
 ├── config.py                  # Environment-based configuration
 ├── assistant.py               # High-level orchestrator + CLI entry point
 ├── models/
-│   └── paper.py               # Pydantic models: Paper, SearchResult, ResearchReport
+│   └── paper.py               # Pydantic models: Paper, NewsItem, SearchResult, ResearchReport
 ├── searchers/
 │   ├── base.py                # Abstract BaseSearcher
 │   ├── web_of_science.py      # Clarivate WoS REST API
 │   ├── google_scholar.py      # scholarly library (scraping)
 │   ├── cnki.py                # CNKI web scraping
 │   ├── ieee.py                # IEEE Xplore REST API
-│   └── web_search.py          # Serper / Brave / DuckDuckGo fallback
+│   ├── web_search.py          # Serper / Brave / DuckDuckGo fallback
+│   └── web_news.py            # Research-news scraping (appends to web search)
 ├── processors/
-│   └── ranker.py              # LLM-powered ranking & summarisation
+│   └── ranker.py              # LLM-powered ranking, summarisation & news summary
+├── utils/
+│   └── journal_partition.py   # Static journal → partition-tier lookup table
 └── mcp_server/
-    └── server.py              # MCP server exposing all tools
+    └── server.py              # MCP server exposing 8 tools (incl. search_news)
 ```
 
 ---
@@ -76,11 +81,15 @@ cp .env.example .env
 ### 3. Run the CLI assistant
 
 ```bash
-# Basic research query
+# Basic research query (free-text)
 python main.py "large language models in clinical medicine"
+
+# Keyword-based search (AND-joined; more precise)
+python main.py --keywords "large language models" "clinical medicine"
 
 # Customise result count
 python main.py "transformer architecture" --top-n 20 --max-per-source 15
+python main.py --keywords "transformer" "architecture" --top-n 20 --max-per-source 15
 ```
 
 ### 4. Use as MCP server (Claude Desktop integration)
@@ -117,7 +126,11 @@ from academic_assistant.assistant import AcademicAssistant
 
 async def main():
     assistant = AcademicAssistant(max_results_per_source=10)
-    report = await assistant.research("deep learning for protein structure prediction", top_n=15)
+    # Keyword-based search (recommended for precision)
+    report = await assistant.research(
+        keywords=["deep learning", "protein structure prediction"],
+        top_n=15,
+    )
     AcademicAssistant.print_report(report)
 
 asyncio.run(main())
@@ -138,6 +151,7 @@ When running as an MCP server the following tools are available:
 | `search_web` | General web search (Serper / Brave / DuckDuckGo) |
 | `search_all_sources` | Fan-out to all sources simultaneously |
 | `rank_and_summarize` | LLM ranking + research report generation |
+| `search_news` | Scrape research-news articles and return an LLM summary |
 
 ---
 
