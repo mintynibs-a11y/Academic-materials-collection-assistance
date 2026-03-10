@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "academic-assistant"
+version = "0.1.0"
+description = "AI-powered academic research assistant with MCP and LLM support"
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+dependencies = [
+    "mcp>=1.26.0",
+    "anthropic>=0.45.0",
+    "openai>=1.63.2",
+    "scholarly>=1.7.11",
+    "arxiv>=2.1.0",
+    "httpx>=0.28.1",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.3",
+    "lxml>=5.3.0",
+    "pydantic>=2.10.6",
+    "python-dotenv>=1.0.1",
+    "anyio>=4.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "pytest-mock>=3.14.0",
+]
+
+[project.scripts]
+academic-assistant = "academic_assistant.assistant:main"
+academic-mcp-server = "academic_assistant.mcp_server.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["academic_assistant*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
